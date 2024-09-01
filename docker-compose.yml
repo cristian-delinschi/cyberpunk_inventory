@@ -1,0 +1,37 @@
+version: "3.7"
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: dev-user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: dev_db
+    ports:
+      - 5432:5432
+    expose:
+      - "5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data:cached
+
+  web:
+    build: .
+    restart:
+      always
+    depends_on:
+      - postgres
+    environment:
+      DB_USER: fastapi
+      DB_PASSWORD: fastapi-password
+      DB_HOST: fastapi-postgresql:5432
+      DB_NAME: fastapi
+    ports:
+      - "8000:8000"
+
+
+
+volumes:
+  db-data:
+  test-db-data:
+
+
