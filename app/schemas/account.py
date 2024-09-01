@@ -6,7 +6,12 @@ class LoginResponse(BaseModel):
     token_type: str
 
 
-class AccountRegister(BaseModel):
+class AccountResponse(BaseModel):
     name: str
     email: str
     password: str
+
+
+class AccountRegister(BaseModel):
+    name: str
+    email: str

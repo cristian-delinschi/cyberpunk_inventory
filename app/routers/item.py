@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Form, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
-from app.db.database import get_db_session
-from app.models.item import Item
 from app.core.auth import get_current_account
+from app.db.database import get_db_session
+from app.schemas.item import ItemCreate, ItemResponse, ItemUpdate
+from app.crud import item as crud
 
 router = APIRouter(
     prefix="/items",
@@ -13,36 +13,89 @@ router = APIRouter(
 )
 
 
-@router.post("")
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=ItemResponse)
 async def create_item(
-        name: str, description: str, category: str, quantity: int, price: int,
+        name: str = Form(...),
+        description: str = Form(...),
+        category: str = Form(...),
+        quantity: int = Form(...),
+        price: int = Form(...),
         session: AsyncSession = Depends(get_db_session),
-        current_account: dict = Depends(get_current_account)
+        current_account: dict = Depends(get_current_account),
 ):
-    async with session.begin():
-        new_item = Item(name=name, description=description, category=category, quantity=quantity, price=price)
-        session.add(new_item)
-        await session.commit()
+    try:
+        item_schema = ItemCreate(
+            name=name,
+            description=description,
+            category=category,
+            quantity=quantity,
+            price=price,
+        )
+    except ValueError as e:
+        raise HTTPException(detail=str(e))
 
-    return {"name": name}
+    new_item = await crud.create_item(
+        db=session,
+        item_schema=item_schema,
+    )
+
+    return new_item
 
 
-@router.get("")
+@router.get("", status_code=status.HTTP_200_OK, response_model=list[ItemResponse])
 async def get_items(
+        limit: int = Query(10, description="items to retrieve"),
+        offset: int = Query(0, description="items to skip"),
         session: AsyncSession = Depends(get_db_session),
         current_account: dict = Depends(get_current_account)
 ):
-    async with session.begin():
-        result = await session.execute(select(Item))
-        items = result.scalars().all()
+    items = await crud.get_items(session, limit, offset)
+    return items
 
-        return [
-            {
-                "name": item.name,
-                "description": item.description,
-                "category": item.category,
-                "quantity": item.quantity,
-                "price": item.price
-            }
-            for item in items
-        ]
+
+@router.get("/{id}", status_code=status.HTTP_200_OK, response_model=ItemResponse)
+async def get_item_by_id(
+        item_id: int,
+        session: AsyncSession = Depends(get_db_session),
+        current_account: dict = Depends(get_current_account)
+):
+    item = await crud.get_item(session, item_id)
+    return item
+
+
+@router.put("/{id}", status_code=status.HTTP_200_OK, response_model=ItemResponse)
+async def update_item_by_id(
+        item_id: int,
+        name: str = Form(None),
+        description: str = Form(None),
+        category: str = Form(None),
+        quantity: int = Form(None),
+        price: int = Form(None),
+        session: AsyncSession = Depends(get_db_session),
+        current_account: dict = Depends(get_current_account)
+):
+    try:
+        item_schema = ItemUpdate(
+            name=name,
+            description=description,
+            category=category,
+            quantity=quantity,
+            price=price,
+        )
+    except ValueError as e:
+        raise HTTPException(detail=str(e))
+
+    updated_item = await crud.update_item(
+        session, item_id, item_schema
+    )
+    return updated_item
+
+
+@router.delete("/{id}", status_code=status.HTTP_200_OK, response_model=ItemResponse)
+async def delete_item_by_id(
+        item_id: int,
+        session: AsyncSession = Depends(get_db_session),
+        current_account: dict = Depends(get_current_account)
+):
+    deleted_item = await crud.delete_item(session, item_id)
+    return deleted_item
